@@ -1,295 +1,625 @@
-import { useState } from 'react';
-import { Send } from 'lucide-react';
-
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
-
-import 'katex/dist/katex.min.css';
-
-import apiClient from '../services/apiClient';
-import { useVoiceChat } from '../hooks/useVoiceChat';
+import { useState, useRef, useEffect } from 'react';
+import {
+  Send,
+  Loader2,
+  X,
+  Camera,
+  Database,
+  HardDrive,
+  MonitorUp,
+  Zap,
+  MousePointerClick,
+  Mic,
+ Volume2,
+  VolumeX,
+  Download,
+  Cloud,
+  Search,
+  Square,
+  ExternalLink
+} from 'lucide-react';
 
 import './ChatCore.css';
+import apiClient from '../services/apiClient';
 
-/**
- * SMART AI OUTPUT FORMATTER
- * Converts raw AI text into beautiful Markdown + LaTeX
- */
-const formatAIOutput = (text) => {
-  if (!text) return '';
+function floatTo16BitPCM(float32Arr) {
+  const buffer = new ArrayBuffer(float32Arr.length * 2);
+  const view = new DataView(buffer);
 
-  let formatted = text;
+  for (let i = 0; i < float32Arr.length; i++) {
+    let s = Math.max(-1, Math.min(1, float32Arr[i]));
+    view.setInt16(i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+  }
 
-  // ==========================================
-  // FIX ESCAPED LATEX
-  // ==========================================
-
-  formatted = formatted
-    .replace(/\\\[/g, '$$')
-    .replace(/\\\]/g, '$$')
-    .replace(/\\\(/g, '$')
-    .replace(/\\\)/g, '$');
-
-  // ==========================================
-  // FIX COMMON AI EQUATIONS
-  // ==========================================
-
-  // Convert standalone equations into math blocks
-  formatted = formatted.replace(
-    /^([A-Za-z][^=\n]*=\s*.+)$/gm,
-    (_, eq) => `\n$$\n${eq.trim()}\n$$\n`
-  );
-
-  // ==========================================
-  // FIX MULTIPLICATION
-  // ==========================================
-
-  formatted = formatted.replace(/\s\*\s/g, ' \\cdot ');
-
-  // ==========================================
-  // FIX SUBSCRIPTS
-  // m1 -> m_1
-  // ==========================================
-
-  formatted = formatted.replace(
-    /([a-zA-Z])(\d+)/g,
-    '$1_$2'
-  );
-
-  // ==========================================
-  // FIX POWERS
-  // r^2 -> r^{2}
-  // ==========================================
-
-  formatted = formatted.replace(
-    /(\w)\^(\d+)/g,
-    '$1^{$2}'
-  );
-
-  // ==========================================
-  // FIX SCIENTIFIC NOTATION
-  // 5.972 x 10^24
-  // ==========================================
-
-  formatted = formatted.replace(
-    /(\d+\.?\d*)\s*x\s*10\^\{?(\d+)\}?/gi,
-    '$1 \\times 10^{$2}'
-  );
-
-  // ==========================================
-  // FIX FRACTIONS
-  // ONLY inside equations
-  // ==========================================
-
-  formatted = formatted.replace(
-    /([a-zA-Z0-9_()]+)\s*\/\s*([a-zA-Z0-9_^{}()]+)/g,
-    '\\frac{$1}{$2}'
-  );
-
-  // ==========================================
-  // CLEAN EXTRA SPACES
-  // ==========================================
-
-  formatted = formatted.replace(/\n{3,}/g, '\n\n');
-
-  return formatted;
-};
+  return buffer;
+}
 
 export default function ChatCore() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
+  const [selectedModel, setSelectedModel] = useState('smart');
+  const [automationEnabled, setAutomationEnabled] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(false);
+  const [isAwake, setIsAwake] = useState(false);
+  const [showActionMenu, setShowActionMenu] = useState(false);
+  const [showTextInput, setShowTextInput] = useState(false);
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [isVaultOpen, setIsVaultOpen] = useState(false);
+  const [vaultData, setVaultData] = useState('');
+  const [showSaveDialog, setShowSaveDialog] = useState(null);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [activeVideoSource, setActiveVideoSource] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [conversationId, setConversationId] = useState(null);
+  const [isExecuting, setIsExecuting] = useState(false);
 
-  const {
-    voiceEnabled,
-    toggleVoice
-  } = useVoiceChat(setMessages, setIsLoading);
+  const fileInputRef = useRef(null);
+  const messagesEndRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const chunksRef = useRef([]);
+  const silenceTimerRef = useRef(null);
+
+  const resetSilence = () => {
+    clearTimeout(silenceTimerRef.current);
+
+    silenceTimerRef.current = setTimeout(() => {
+      setIsAwake(false);
+      console.log('😴 Indra sleeping');
+    }, 5000);
+  };
+
+  useEffect(() => {
+    return () => clearTimeout(silenceTimerRef.current);
+  }, []);
+
+  const handleModelChange = (mode) => {
+    if (mode === 'ultra') {
+      const user = JSON.parse(localStorage.getItem('userInfo'));
+
+      if (!user || !user.isPremium) {
+        setShowUpgradeModal(true);
+        return;
+      }
+    }
+
+    setSelectedModel(mode);
+  };
 
   const handleSend = async (e) => {
     e?.preventDefault();
 
-    if (!input.trim() || isLoading) return;
+    if (isLoading) return;
 
-    const userMessage = input.trim();
+    if (!input.trim() && !selectedImage && !activeVideoSource) return;
 
-    // ==========================================
-    // ADD USER MESSAGE
-    // ==========================================
+    const userMessage = input;
 
     setMessages((prev) => [
       ...prev,
       {
         role: 'user',
         text: userMessage,
-      },
+        image: selectedImage
+      }
     ]);
 
     setInput('');
+    setSelectedImage(null);
+    setShowTextInput(false);
+    setActiveVideoSource(null);
     setIsLoading(true);
 
     try {
-      // ==========================================
-      // API CALL
-      // ==========================================
-
-      const { data } = await apiClient.post('/chat', {
+      const response = await apiClient.post('/chat', {
+        user_id: 'default_user',
         prompt: userMessage,
-        conversationId,
+        mode: selectedModel === 'lite' ? 'fast' : selectedModel,
+        agent: automationEnabled
       });
 
-      // ==========================================
-      // SAVE CONVERSATION ID
-      // ==========================================
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'ai',
+          text: response.data.response
+        }
+      ]);
 
-      if (data.conversationId) {
-        setConversationId(data.conversationId);
-      }
-
-      // ==========================================
-      // ADD AI MESSAGE
-      // ==========================================
+    } catch (error) {
+      console.error('Failed to send message:', error);
 
       setMessages((prev) => [
         ...prev,
         {
           role: 'ai',
-          text:
-            data.response ||
-            'No response received.',
-        },
+          text: "Sorry, I couldn't reach the server. Please check your connection."
+        }
       ]);
-    } catch (err) {
-      console.error('Chat Error:', err);
 
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: 'ai',
-          text:
-            '❌ Connection failed. Please check your server.',
-        },
-      ]);
     } finally {
       setIsLoading(false);
     }
   };
 
+  const startStreamingVoice = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: true
+      });
+
+      const ws = new WebSocket(
+        'wss://indra-ai-core.onrender.com/ws/voice'
+      );
+
+      mediaRecorderRef.current = { ws };
+
+      ws.onerror = (err) => {
+        console.error('WebSocket error, falling back to REST:', err);
+        ws.close();
+        startRecording();
+      };
+
+      const audioContext = new AudioContext({
+        sampleRate: 16000
+      });
+
+      const source = audioContext.createMediaStreamSource(stream);
+
+      const processor = audioContext.createScriptProcessor(
+        4096,
+        1,
+        1
+      );
+
+      source.connect(processor);
+      processor.connect(audioContext.destination);
+
+      processor.onaudioprocess = (e) => {
+        if (ws.readyState === WebSocket.OPEN) {
+          const input = e.inputBuffer.getChannelData(0);
+          ws.send(floatTo16BitPCM(input));
+        }
+      };
+
+      ws.onmessage = async (event) => {
+        if (event.data instanceof Blob) {
+          const audio = new Audio(
+            URL.createObjectURL(event.data)
+          );
+
+          audio.play();
+          return;
+        }
+
+        const data = JSON.parse(event.data);
+
+        if (data.type === 'transcript') {
+          const text = data.text.toLowerCase();
+
+          if (!isAwake && text.includes('indra')) {
+            setIsAwake(true);
+            console.log('🔥 Indra Activated');
+            resetSilence();
+            return;
+          }
+
+          if (isAwake) {
+            resetSilence();
+
+            setMessages((prev) => [
+              ...prev,
+              {
+                role: 'user',
+                text: data.text
+              }
+            ]);
+          }
+        }
+
+        if (data.type === 'response' && isAwake) {
+          setMessages((prev) => [
+            ...prev,
+            {
+              role: 'ai',
+              text: data.text
+            }
+          ]);
+        }
+      };
+
+    } catch (err) {
+      console.error(
+        'Streaming setup error, falling back:',
+        err
+      );
+
+      startRecording();
+    }
+  };
+
+  const stopStreamingVoice = () => {
+    const ws = mediaRecorderRef.current?.ws;
+
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send('interrupt');
+      ws.close();
+    }
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: true
+      });
+
+      const recorder = new MediaRecorder(stream);
+
+      mediaRecorderRef.current = recorder;
+      chunksRef.current = [];
+
+      recorder.ondataavailable = (e) => {
+        chunksRef.current.push(e.data);
+      };
+
+      recorder.onstop = async () => {
+        const blob = new Blob(chunksRef.current, {
+          type: 'audio/webm'
+        });
+
+        const formData = new FormData();
+
+        formData.append('file', blob);
+
+        try {
+          setIsLoading(true);
+
+          const res = await fetch(
+            `${import.meta.env.VITE_API_BASE_URL}/voice`,
+            {
+              method: 'POST',
+              body: formData
+            }
+          );
+
+          const data = await res.json();
+
+          setMessages((prev) => [
+            ...prev,
+            {
+              role: 'user',
+              text: data.input_text || '[voice]'
+            },
+            {
+              role: 'ai',
+              text: data.response
+            }
+          ]);
+
+          if (data.audio_url) {
+            const audio = new Audio(
+              `${import.meta.env.VITE_API_BASE_URL}${data.audio_url}`
+            );
+
+            audio.play();
+          }
+
+        } catch (err) {
+          console.error('Voice fallback error:', err);
+
+        } finally {
+          setIsLoading(false);
+        }
+      };
+
+      recorder.start();
+
+    } catch (err) {
+      console.error('Mic error:', err);
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current instanceof MediaRecorder) {
+      mediaRecorderRef.current.stop();
+    }
+  };
+
+  const toggleVoice = () => {
+    if (!voiceEnabled) {
+      setVoiceEnabled(true);
+      startStreamingVoice();
+
+    } else {
+      setVoiceEnabled(false);
+      setIsAwake(false);
+
+      clearTimeout(silenceTimerRef.current);
+
+      if (mediaRecorderRef.current?.ws) {
+        stopStreamingVoice();
+      } else {
+        stopRecording();
+      }
+    }
+  };
+
+  const interruptAI = () => {
+    const ws = mediaRecorderRef.current?.ws;
+
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send('interrupt');
+    }
+  };
+
+  const handleDeviceUpload = (e) => {
+    const file = e.target.files[0];
+
+    if (!file) return;
+
+    const reader = new FileReader();
+
+    reader.onloadend = () => {
+      setSelectedImage(reader.result);
+      setShowActionMenu(false);
+      setShowTextInput(true);
+    };
+
+    reader.readAsDataURL(file);
+  };
+
+  const isInputModeActive =
+    showTextInput ||
+    activeVideoSource ||
+    selectedImage;
+
   return (
-    <div className="indra-container">
-
-      {/* ==========================================
-          HEADER
-      ========================================== */}
-
+    <div
+      id="indra-chat-core-container"
+      className="indra-container"
+    >
       <div className="indra-header">
-
-        <div className="logo-section">
+        <div
+          className="indra-header-brand"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px'
+          }}
+        >
           <img
             src="/favicon.png"
             alt="Indra Logo"
-            className="indra-logo"
+            style={{
+              width: '28px',
+              height: '28px',
+              borderRadius: '6px',
+              objectFit: 'contain'
+            }}
           />
 
-          <h2>Indra AI</h2>
+          <a
+            href="https://indra.ialksng.me"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="indra-icon-btn"
+          >
+            <ExternalLink size={18} />
+          </a>
         </div>
 
-        <button
-          className={`voice-btn ${
-            voiceEnabled ? 'active' : ''
-          }`}
-          onClick={toggleVoice}
-        >
-          {voiceEnabled
-            ? '🎤 Voice ON'
-            : '🔇 Voice OFF'}
-        </button>
-
+        <div className="indra-model-toggle">
+          {['lite', 'smart', 'ultra'].map((mode) => (
+            <button
+              key={mode}
+              onClick={() => handleModelChange(mode)}
+              className={`indra-toggle-btn ${
+                selectedModel === mode ? 'active' : ''
+              }`}
+            >
+              {mode}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* ==========================================
-          CHAT AREA
-      ========================================== */}
-
       <div className="indra-chat-area">
-
-        {messages.length === 0 && (
-          <div className="indra-empty-state">
-
-            <h2>Indra AI</h2>
-
-            <p>
-              Ask anything.
-              Math, code, science, files,
-              reasoning, AI tools and more.
-            </p>
-
-          </div>
-        )}
-
-        {messages.map((message, index) => (
+        {messages.map((msg, i) => (
           <div
-            key={index}
-            className={`bubble ${message.role}`}
+            key={i}
+            className={`indra-msg-wrapper ${msg.role}`}
           >
+            <div className={`indra-msg-bubble ${msg.role}`}>
+              {msg.image && (
+                <img
+                  src={msg.image}
+                  className="indra-msg-img"
+                  alt="upload"
+                />
+              )}
 
-            <ReactMarkdown
-              remarkPlugins={[
-                remarkGfm,
-                remarkMath
-              ]}
-              rehypePlugins={[rehypeKatex]}
-            >
-              {formatAIOutput(message.text)}
-            </ReactMarkdown>
-
+              <div
+                style={{
+                  whiteSpace: 'pre-wrap',
+                  lineHeight: 1.6
+                }}
+              >
+                {msg.text}
+              </div>
+            </div>
           </div>
         ))}
 
         {isLoading && (
-          <div className="bubble ai typing">
-
-            <div className="typing-dots">
-              <span />
-              <span />
-              <span />
-            </div>
-
-          </div>
+          <Loader2
+            className="animate-spin indra-empty-icon"
+            size={24}
+            style={{ margin: '0 auto' }}
+          />
         )}
 
+        <div ref={messagesEndRef} />
       </div>
 
-      {/* ==========================================
-          INPUT AREA
-      ========================================== */}
-
-      <form
-        className="indra-input-form"
-        onSubmit={handleSend}
-      >
-
+      <div className="indra-action-hub">
         <input
-          type="text"
-          value={input}
-          placeholder="Ask Indra anything..."
-          onChange={(e) =>
-            setInput(e.target.value)
-          }
-          disabled={isLoading}
+          type="file"
+          accept="image/*"
+          ref={fileInputRef}
+          onChange={handleDeviceUpload}
+          style={{ display: 'none' }}
         />
 
-        <button
-          type="submit"
-          disabled={isLoading}
-        >
-          <Send size={18} />
-        </button>
+        {isInputModeActive ? (
+          <div className="indra-input-form">
+            <button
+              onClick={() => {
+                setShowTextInput(false);
+                setActiveVideoSource(null);
+                setInput('');
+              }}
+              className="indra-icon-btn"
+            >
+              <X size={20} />
+            </button>
 
-      </form>
+            <div className="indra-input-wrapper">
+              <input
+                value={input}
+                onChange={(e) =>
+                  setInput(e.target.value)
+                }
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
 
+                    if (!isLoading) {
+                      handleSend(e);
+                    }
+                  }
+                }}
+                disabled={isLoading}
+                placeholder={
+                  isLoading
+                    ? 'Indra is thinking...'
+                    : 'Type your command...'
+                }
+                className="indra-main-input"
+                autoFocus
+              />
+            </div>
+
+            <button
+              onClick={(e) => handleSend(e)}
+              disabled={
+                isLoading ||
+                (!input.trim() &&
+                  !selectedImage &&
+                  !activeVideoSource)
+              }
+              className="indra-send-btn"
+            >
+              <Send size={20} />
+            </button>
+          </div>
+        ) : (
+          <div className="indra-center-hub">
+            <div
+              className={`indra-action-dock ${
+                showActionMenu ? 'open' : ''
+              }`}
+            >
+              <div className="indra-dock-side left">
+                <button
+                  onClick={() => {
+                    setShowTextInput(true);
+                    setShowActionMenu(false);
+                  }}
+                  className="indra-menu-item"
+                >
+                  <Search size={18} />
+                  <span>SEARCH</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    toggleVoice();
+                    setShowTextInput(true);
+                    setShowActionMenu(false);
+                  }}
+                  className="indra-menu-item"
+                >
+                  <Mic size={18} />
+                  <span>VOICE</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setActiveVideoSource('camera');
+                    setShowTextInput(true);
+                    setShowActionMenu(false);
+                  }}
+                  className="indra-menu-item"
+                >
+                  <Camera size={18} />
+                  <span>CAMERA</span>
+                </button>
+              </div>
+
+              <div className="indra-dock-spacer"></div>
+
+              <div className="indra-dock-side right">
+                <button
+                  onClick={() => {
+                    setActiveVideoSource('screen');
+                    setShowTextInput(true);
+                    setShowActionMenu(false);
+                  }}
+                  className="indra-menu-item"
+                >
+                  <MonitorUp size={18} />
+                  <span>PRESENT</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    fileInputRef.current?.click();
+                    setShowActionMenu(false);
+                  }}
+                  className="indra-menu-item"
+                >
+                  <HardDrive size={18} />
+                  <span>DEVICE</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIsVaultOpen(true);
+                    setShowActionMenu(false);
+                  }}
+                  className="indra-menu-item"
+                >
+                  <Database size={18} />
+                  <span>VAULT</span>
+                </button>
+              </div>
+            </div>
+
+            <button
+              onClick={() =>
+                setShowActionMenu(!showActionMenu)
+              }
+              className={`indra-thunder-btn ${
+                showActionMenu ? 'open' : ''
+              }`}
+            >
+              {showActionMenu ? (
+                <X size={24} />
+              ) : (
+                <Zap size={24} fill="currentColor" />
+              )}
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
