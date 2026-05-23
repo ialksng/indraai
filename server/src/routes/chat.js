@@ -1,11 +1,6 @@
-const express =
-    require("express");
-
-const router =
-    express.Router();
-
-const ai =
-    require("../router/router");
+const express = require("express");
+const router = express.Router();
+const ai = require("../router/router");
 
 const {
     createConversation,
@@ -18,9 +13,7 @@ const {
 } = require("../memory/contextBuilder");
 
 router.post("/", async (req, res) => {
-
     try {
-
         let {
             prompt,
             mode = "smart",
@@ -28,7 +21,6 @@ router.post("/", async (req, res) => {
         } = req.body;
 
         if (!prompt) {
-
             return res.status(400).json({
                 success: false,
                 error: "Prompt required"
@@ -36,18 +28,12 @@ router.post("/", async (req, res) => {
         }
 
         // Create new conversation
-
         if (!conversationId) {
-
-            const conversation =
-                await createConversation();
-
-            conversationId =
-                conversation.id;
+            const conversation = await createConversation();
+            conversationId = conversation.id;
         }
 
         // Save user message
-
         await addMessage(
             conversationId,
             "user",
@@ -55,27 +41,15 @@ router.post("/", async (req, res) => {
         );
 
         // Get old messages
-
-        const messages =
-            await getMessages(
-                conversationId
-            );
+        const messages = await getMessages(conversationId);
 
         // Build AI context
-
-        const context =
-            buildContext(messages);
+        const context = buildContext(messages);
 
         // Generate AI response
-
-        const response =
-            await ai.generate(
-                context,
-                mode
-            );
+        const response = await ai.generate(context, mode);
 
         // Save AI message
-
         await addMessage(
             conversationId,
             "assistant",
@@ -83,24 +57,16 @@ router.post("/", async (req, res) => {
         );
 
         res.json({
-
             success: true,
-
             conversationId,
-
             mode,
-
             response
         });
 
     } catch (err) {
-
-        console.error(err);
-
+        console.error("AI Error:", err);
         res.status(500).json({
-
             success: false,
-
             error: "AI failed"
         });
     }
