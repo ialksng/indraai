@@ -15,25 +15,16 @@ const huggingface =
 
 async function generate(prompt, mode) {
 
-    // ⚡ FAST
     if (mode === "fast") {
 
         try {
-
-            console.log(
-                "FAST → Local Fast Model 1"
-            );
 
             return await ollama.generate(
                 process.env.OLLAMA_MODEL_FAST1,
                 prompt
             );
 
-        } catch (err1) {
-
-            console.log(
-                "FAST1 failed → trying FAST2"
-            );
+        } catch {
 
             try {
 
@@ -42,72 +33,76 @@ async function generate(prompt, mode) {
                     prompt
                 );
 
-            } catch (err2) {
+            } catch {
 
-                console.log(
-                    "FAST2 failed → using Groq"
+                return await groq.generate(
+                    prompt
                 );
-
-                return await groq.generate(prompt);
-
             }
         }
     }
 
-    // 🧠 SMART
-    if (mode === "smart") {
+    try {
+
+        return await ollama.generate(
+            process.env.OLLAMA_MODEL_SMART,
+            prompt
+        );
+
+    } catch {
 
         try {
 
-            console.log(
-                "SMART → Local Llama3"
-            );
-
-            return await ollama.generate(
-                process.env.OLLAMA_MODEL_SMART,
+            return await gemini.generate(
                 prompt
             );
 
-        } catch (err1) {
-
-            console.log(
-                "Llama3 failed → trying Gemini"
-            );
+        } catch {
 
             try {
 
-                return await gemini.generate(prompt);
-
-            } catch (err2) {
-
-                console.log(
-                    "Gemini failed → trying OpenRouter"
+                return await openrouter.generate(
+                    prompt
                 );
 
-                try {
+            } catch {
 
-                    return await openrouter.generate(prompt);
-
-                } catch (err3) {
-
-                    console.log(
-                        "OpenRouter failed → trying HuggingFace"
-                    );
-
-                    return await huggingface.generate(prompt);
-
-                }
+                return await huggingface.generate(
+                    prompt
+                );
             }
         }
     }
+}
 
-    // DEFAULT
-    return await ollama.generate(
-        process.env.OLLAMA_MODEL_SMART,
-        prompt
-    );
+async function stream(
+    prompt,
+    mode,
+    onToken
+) {
+
+    try {
+
+        return await ollama.stream(
+            mode === "fast"
+                ? process.env.OLLAMA_MODEL_FAST1
+                : process.env.OLLAMA_MODEL_SMART,
+            prompt,
+            onToken
+        );
+
+    } catch {
+
+        const text =
+            await generate(prompt, mode);
+
+        onToken(text);
+
+        return text;
+    }
 }
 
 module.exports = {
-    generate
+    generate,
+    stream
 };

@@ -1,6 +1,9 @@
 const express = require("express");
+
 const router = express.Router();
-const ai = require("../router/router");
+
+const ai =
+    require("../router/router");
 
 const {
     createConversation,
@@ -13,7 +16,9 @@ const {
 } = require("../memory/contextBuilder");
 
 router.post("/", async (req, res) => {
+
     try {
+
         let {
             prompt,
             mode = "smart",
@@ -21,54 +26,81 @@ router.post("/", async (req, res) => {
         } = req.body;
 
         if (!prompt) {
+
             return res.status(400).json({
                 success: false,
                 error: "Prompt required"
             });
         }
 
-        // Create new conversation
         if (!conversationId) {
-            const conversation = await createConversation();
-            conversationId = conversation.id;
+
+            const conversation =
+                await createConversation();
+
+            conversationId =
+                conversation.id;
         }
 
-        // Save user message
         await addMessage(
             conversationId,
             "user",
             prompt
         );
 
-        // Get old messages
-        const messages = await getMessages(conversationId);
+        const messages =
+            await getMessages(
+                conversationId
+            );
 
-        // Build AI context
-        const context = buildContext(messages);
+        const context =
+            buildContext(messages);
 
-        // Generate AI response
-        const response = await ai.generate(context, mode);
+        res.writeHead(200, {
+            "Content-Type":
+                "text/event-stream",
+            "Cache-Control":
+                "no-cache",
+            Connection: "keep-alive"
+        });
 
-        // Save AI message
+        let finalResponse = "";
+
+        await ai.stream(
+            context,
+            mode,
+            (token) => {
+
+                finalResponse += token;
+
+                res.write(
+                    `data: ${JSON.stringify({
+                        token
+                    })}\n\n`
+                );
+            }
+        );
+
         await addMessage(
             conversationId,
             "assistant",
-            response
+            finalResponse
         );
 
-        res.json({
-            success: true,
-            conversationId,
-            mode,
-            response
-        });
+        res.write(
+            `data: ${JSON.stringify({
+                done: true,
+                conversationId
+            })}\n\n`
+        );
+
+        res.end();
 
     } catch (err) {
-        console.error("AI Error:", err);
-        res.status(500).json({
-            success: false,
-            error: "AI failed"
-        });
+
+        console.error(err);
+
+        res.end();
     }
 });
 
