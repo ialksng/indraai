@@ -1,17 +1,17 @@
 const ollama =
-    require("../providers/ollama");
+    require("../services/ai/ollama");
 
 const groq =
-    require("../providers/groq");
+    require("../services/ai/groq");
 
 const gemini =
-    require("../providers/gemini");
+    require("../services/ai/gemini");
 
 const openrouter =
-    require("../providers/openrouter");
+    require("../services/ai/openrouter");
 
 const huggingface =
-    require("../providers/huggingface");
+    require("../services/ai/huggingface");
 
 async function generate(prompt, mode) {
 
