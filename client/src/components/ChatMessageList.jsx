@@ -1,7 +1,6 @@
 import React from 'react';
 import TypingIndicator from './TypingIndicator';
 
-// Markdown & Math Imports
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
@@ -9,17 +8,15 @@ import rehypeKatex from 'rehype-katex';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
-// CRITICAL: KaTeX CSS for formatting math equations properly
 import 'katex/dist/katex.min.css';
 
-// Utility to fix AI's formatting of LaTeX before rendering
 const preprocessLaTeX = (text) => {
   if (!text) return '';
   return text
-    .replace(/\\\[/g, '$$$') // Convert \[ to $$
-    .replace(/\\\]/g, '$$$') // Convert \] to $$
-    .replace(/\\\(/g, '$')   // Convert \( to $
-    .replace(/\\\)/g, '$');  // Convert \) to $
+    .replace(/\\\[/g, '$$$') 
+    .replace(/\\\]/g, '$$$') 
+    .replace(/\\\(/g, '$')   
+    .replace(/\\\)/g, '$');
 };
 
 export default function ChatMessageList({ messages, isLoading, messagesEndRef }) {
@@ -57,14 +54,11 @@ export default function ChatMessageList({ messages, isLoading, messagesEndRef })
               {msg.text === 'Typing...' ? (
                 <TypingIndicator />
               ) : isUser ? (
-                // Keep user messages as standard text
                 <div className="whitespace-pre-wrap break-words">{msg.text}</div>
               ) : (
-                // Pass AI messages through the Markdown & Math parser
                 <div className="break-words">
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm, remarkMath]}
-                    // Tell KaTeX not to crash when the AI uses sloppy math syntax
                     rehypePlugins={[[rehypeKatex, { strict: false, throwOnError: false }]]}
                     components={{
                       p: ({node, ...props}) => <p className="mb-2 last:mb-0" {...props} />,

@@ -43,20 +43,12 @@ export default function IndraWebsite() {
       <div className="hidden md:flex w-64 bg-black/40 border-r border-white/10 flex-col backdrop-blur-md">
         
         {/* LOGO AREA */}
-        <div className="p-6 flex items-center gap-3">
-          <div className="relative flex items-center">
-            <img 
-              src="/favicon.svg" 
-              alt="Indra Logo" 
-              className="w-8 h-8 relative z-10" 
-              onError={(e) => { e.target.style.display = 'none' }} 
-            />
-            <div 
-              className="absolute inset-0 blur-lg opacity-70 rounded-full scale-125 pointer-events-none" 
-              style={{ backgroundColor: "#FACC15" }}
-            ></div>
-          </div>
-          <h1 className="text-2xl font-extrabold tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-amber-300 to-orange-500"></h1>
+        <div className="p-6 flex items-center">
+          <img
+            src="/favicon.png"
+            alt="Indra Logo"
+            className="h-16 w-40 object-contain"
+          />
         </div>
         
         {/* NAV */}

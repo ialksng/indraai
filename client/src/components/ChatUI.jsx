@@ -1,6 +1,5 @@
 import React from 'react';
 
-// Import the modular visual components
 import ChatHeader from './ChatHeader';
 import ChatMessageList from './ChatMessageList';
 import ChatInputForm from './ChatInputForm';
@@ -8,7 +7,6 @@ import ChatActionDock from './ChatActionDock';
 import ChatVault from './ChatVault'; 
 
 export default function ChatUI({
-  // State & Variables
   messages,
   input,
   selectedModel,
@@ -19,16 +17,16 @@ export default function ChatUI({
   isVaultOpen,
   isLoading,
   isInputModeActive,
-  // Setters
+
   setInput,
   setShowActionMenu,
   setShowTextInput,
   setActiveVideoSource,
   setIsVaultOpen,
-  // Refs
+
   fileInputRef,
   messagesEndRef,
-  // Handlers
+
   handleModelChange,
   handleSend,
   handleDeviceUpload,
