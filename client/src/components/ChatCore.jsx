@@ -1,4 +1,3 @@
-// client/src/components/ChatCore.jsx
 import { useState, useRef, useEffect } from 'react';
 import './ChatCore.css';
 
@@ -345,6 +344,11 @@ export default function ChatCore() {
       isVaultOpen={isVaultOpen}
       isLoading={isLoading}
       isInputModeActive={isInputModeActive}
+      
+      // ✅ ADDED THESE TWO LINES
+      showUpgradeModal={showUpgradeModal} 
+      setShowUpgradeModal={setShowUpgradeModal}
+
       setInput={setInput}
       setShowActionMenu={setShowActionMenu}
       setShowTextInput={setShowTextInput}

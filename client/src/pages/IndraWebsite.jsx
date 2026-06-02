@@ -59,19 +59,7 @@ export default function IndraWebsite() {
           <button className="w-full flex items-center gap-3 px-4 py-3 text-gray-400 hover:text-white hover:bg-white/5 rounded-xl transition-colors">
             <History size={18} /> History
           </button>
-          <button className="w-full flex items-center gap-3 px-4 py-3 text-gray-400 hover:text-white hover:bg-white/5 rounded-xl transition-colors">
-            <Settings size={18} /> Settings
-          </button>
         </nav>
-
-        {/* BOTTOM BUTTON */}
-        <a 
-          id="backtohubButton"
-          href="https://smartsphere.ialksng.me" 
-          className="m-4 flex items-center justify-center gap-2 p-3 text-gray-400 hover:text-amber-400 border border-white/10 hover:border-amber-500/30 bg-black/20 rounded-xl transition-all"
-        >
-          <ArrowLeft size={16} /> Back to Hub
-        </a>
       </div>
 
       {/* MAIN WORKSPACE */}
