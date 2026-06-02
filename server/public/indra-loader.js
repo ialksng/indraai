@@ -29,14 +29,14 @@
     }
     #indra-iframe { 
       width: 400px; 
-      height: 650px; 
+      height: 600px; 
       max-height: calc(100vh - 120px); 
       border: 1px solid rgba(255,255,255,0.1); 
       border-radius: 20px; 
       box-shadow: 0 20px 40px -10px rgba(0,0,0,0.5), 0 0 20px rgba(245, 158, 11, 0.05); 
       display: none; 
       margin-bottom: 20px; 
-      background: #020617; /* Matches the Indra dark theme */
+      background: #020617; 
       transition: opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1), transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); 
       overflow: hidden; 
       opacity: 0; 
@@ -49,9 +49,9 @@
       transform: translateY(0) scale(1); 
     }
     #indra-toggle-btn { 
-      width: 64px; 
-      height: 64px; 
-      border-radius: 32px; 
+      width: 60px; 
+      height: 60px; 
+      border-radius: 30px; 
       background: linear-gradient(135deg, #FACC15, #F97316); 
       color: #fff; 
       border: none; 
@@ -70,8 +70,8 @@
       transform: scale(0.95);
     }
     #indra-toggle-btn svg { 
-      width: 32px; 
-      height: 32px; 
+      width: 28px; 
+      height: 28px; 
       fill: none; 
       stroke: currentColor; 
       stroke-width: 2.2; 
@@ -90,11 +90,17 @@
     }
     .indra-highlight { animation: indraAgentPulse 1s ease-out forwards; border-radius: inherit; }
     
+    /* --- MOBILE RESPONSIVE TWEAKS --- */
     @media (max-width: 480px) { 
-      #indra-widget-container { bottom: 16px; right: 16px; }
+      #indra-widget-container { 
+        bottom: 16px; 
+        right: 16px; 
+      }
       #indra-iframe { 
         width: calc(100vw - 32px); 
-        height: calc(100vh - 100px); 
+        /* ✅ FIXED: Set a much shorter base height and prevent it from exceeding 75% of the screen */
+        height: 500px; 
+        max-height: 75vh; 
         border-radius: 16px;
       } 
     }
