@@ -1,121 +1,79 @@
-// const express = require("express");
-const router = express.Router();
+import React, { useState, useEffect } from 'react';
+import { X, MessageSquare, Loader2 } from 'lucide-react';
 
-// const ai = require("../");
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
-// const {
-//     createConversation,
-//     addMessage,
-//     getMessages,
-//     getConversations 
-// } = require("../memory/conversations");
+export default function ChatVault({ isOpen, onClose, onSelectConversation }) {
+  const [conversations, setConversations] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
 
-// const {
-//     buildContext
-// } = require("../memory/contextBuilder");
-
-// ==========================================
-// 1. MAIN CHAT STREAMING ROUTE
-// ==========================================
-router.post("/", async (req, res) => {
-    try {
-        let {
-            prompt,
-            mode = "smart",
-            conversationId
-        } = req.body;
-
-        if (!prompt) {
-            return res.status(400).json({
-                success: false,
-                error: "Prompt required"
-            });
-        }
-
-        if (!conversationId) {
-            const conversation = await createConversation();
-            conversationId = conversation.id;
-        }
-
-        await addMessage(
-            conversationId,
-            "user",
-            prompt
-        );
-
-        const messages = await getMessages(
-            conversationId
-        );
-
-        const context = buildContext(messages);
-
-        res.writeHead(200, {
-            "Content-Type": "text/event-stream",
-            "Cache-Control": "no-cache",
-            Connection: "keep-alive"
-        });
-
-        let finalResponse = "";
-
-        await ai.stream(
-            context,
-            mode,
-            (token) => {
-                finalResponse += token;
-                res.write(
-                    `data: ${JSON.stringify({
-                        token
-                    })}\n\n`
-                );
-            }
-        );
-
-        await addMessage(
-            conversationId,
-            "assistant",
-            finalResponse
-        );
-
-        res.write(
-            `data: ${JSON.stringify({
-                done: true,
-                conversationId
-            })}\n\n`
-        );
-
-        res.end();
-
-    } catch (err) {
-        console.error(err);
-        res.end();
+  useEffect(() => {
+    if (isOpen) {
+      fetchHistory();
     }
-});
+  }, [isOpen]);
 
-// ==========================================
-// 2. VAULT ROUTES (NEW)
-// ==========================================
-
-// Fetch all past conversations for the Vault menu
-router.get("/history/:userId", async (req, res) => {
+  const fetchHistory = async () => {
+    setIsLoading(true);
     try {
-        const userId = req.params.userId || "guest";
-        const history = await getConversations(userId);
-        res.json({ success: true, history });
+      const response = await fetch(`${API_BASE}/api/v1/indra/chat/history/guest`);
+      const data = await response.json();
+      if (data.success && data.history) {
+        setConversations(data.history);
+      }
     } catch (error) {
-        console.error("Vault Error:", error);
-        res.status(500).json({ success: false, error: "Failed to load vault" });
+      console.error("Failed to fetch vault history:", error);
+    } finally {
+      setIsLoading(false);
     }
-});
+  };
 
-// Fetch specific messages when a user clicks a chat in the Vault
-router.get("/history/messages/:conversationId", async (req, res) => {
-    try {
-        const messages = await getMessages(req.params.conversationId);
-        res.json({ success: true, messages });
-    } catch (error) {
-        console.error("Vault Messages Error:", error);
-        res.status(500).json({ success: false, error: "Failed to load messages" });
-    }
-});
+  if (!isOpen) return null;
 
-module.exports = router;
+  return (
+    <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="bg-[#0f172a] border border-white/10 rounded-2xl w-[90%] max-w-md overflow-hidden shadow-2xl flex flex-col max-h-[80%]">
+        
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b border-white/10 bg-[#1e293b]">
+          <h3 className="text-white font-semibold flex items-center gap-2 m-0 text-lg">
+            <MessageSquare size={18} className="text-amber-400" />
+            Vault History
+          </h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors bg-transparent border-none cursor-pointer p-1">
+            <X size={20} />
+          </button>
+        </div>
+        
+        {/* List Content */}
+        <div className="p-4 overflow-y-auto flex-1">
+          {isLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="animate-spin text-amber-500" size={32} />
+            </div>
+          ) : conversations.length === 0 ? (
+            <div className="text-center py-8 text-gray-400 text-sm">
+              No past conversations found.
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {conversations.map((conv) => (
+                <button 
+                  key={conv.id} 
+                  onClick={() => onSelectConversation(conv.id)}
+                  className="flex items-center gap-3 p-3 text-left w-full rounded-xl bg-white/5 hover:bg-white/10 transition-colors text-gray-200 border border-transparent hover:border-white/10 cursor-pointer"
+                >
+                  <MessageSquare size={16} className="text-gray-500 shrink-0" />
+                  <div className="flex-1 truncate text-sm">
+                    {conv.title || `Chat from ${new Date(conv.created_at || Date.now()).toLocaleString()}`}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        
+      </div>
+    </div>
+  );
+}

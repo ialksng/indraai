@@ -1,12 +1,9 @@
+// client/src/components/ChatCore.jsx
 import { useState, useRef, useEffect } from 'react';
 import './ChatCore.css';
 
-// Import our new modular components
-import ChatHeader from './ChatHeader';
-import ChatMessageList from './ChatMessageList';
-import ChatInputForm from './ChatInputForm';
-import ChatActionDock from './ChatActionDock';
-import ChatVault from './ChatVault'; 
+// Import our new dedicated UI component
+import ChatUI from './ChatUI';
 
 function floatTo16BitPCM(float32Arr) {
   const buffer = new ArrayBuffer(float32Arr.length * 2);
@@ -19,6 +16,7 @@ function floatTo16BitPCM(float32Arr) {
 }
 
 export default function ChatCore() {
+  // --- STATE ---
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [conversationId, setConversationId] = useState(null); 
@@ -37,12 +35,14 @@ export default function ChatCore() {
   // SAFE API BASE URL FALLBACK
   const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
+  // --- REFS ---
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
   const silenceTimerRef = useRef(null);
 
+  // --- LOGIC & HANDLERS ---
   const resetSilence = () => {
     clearTimeout(silenceTimerRef.current);
     silenceTimerRef.current = setTimeout(() => {
@@ -71,7 +71,6 @@ export default function ChatCore() {
     setSelectedModel(mode);
   };
 
-  // ---- NEW: Load Past Conversation Logic ----
   const loadConversation = async (id) => {
     setIsVaultOpen(false);
     setIsLoading(true);
@@ -82,7 +81,6 @@ export default function ChatCore() {
       const data = await response.json();
       
       if (data.success) {
-        // Map backend database format to frontend UI format
         const formattedMessages = data.messages.map(msg => ({
           role: msg.role === 'assistant' ? 'ai' : msg.role,
           text: msg.content
@@ -96,7 +94,6 @@ export default function ChatCore() {
     }
   };
 
-  // Upgraded to handle Server-Sent Events (SSE) stream from backend
   const handleSend = async (e) => {
     e?.preventDefault();
     if (isLoading) return;
@@ -111,8 +108,7 @@ export default function ChatCore() {
     setActiveVideoSource(null);
     setIsLoading(true);
 
-    // Prepare an empty AI message for the stream
-    setMessages((prev) => [...prev, { role: 'ai', text: '' }]);
+    setMessages((prev) => [...prev, { role: 'ai', text: 'Typing...' }]);
 
     try {
       const response = await fetch(`${API_BASE}/api/v1/indra/chat`, {
@@ -130,10 +126,21 @@ export default function ChatCore() {
       const reader = response.body.getReader();
       const decoder = new TextDecoder('utf-8');
       let aiText = '';
+      let isFirstToken = true; 
 
       while (true) {
         const { value, done } = await reader.read();
-        if (done) break;
+        
+        if (done) {
+          if (isFirstToken) {
+             setMessages((prev) => {
+                const newMessages = [...prev];
+                newMessages[newMessages.length - 1].text = "⚠️ AI encountered an error. Please check your backend logs or API keys.";
+                return newMessages;
+             });
+          }
+          break;
+        }
 
         const chunk = decoder.decode(value, { stream: true });
         const lines = chunk.split('\n\n');
@@ -146,7 +153,13 @@ export default function ChatCore() {
                 const data = JSON.parse(dataStr);
                 
                 if (data.token) {
-                  aiText += data.token;
+                  if (isFirstToken) {
+                    aiText = data.token;
+                    isFirstToken = false;
+                  } else {
+                    aiText += data.token;
+                  }
+                  
                   setMessages((prev) => {
                     const newMessages = [...prev];
                     newMessages[newMessages.length - 1].text = aiText;
@@ -168,7 +181,7 @@ export default function ChatCore() {
       console.error('Failed to send message:', error);
       setMessages((prev) => {
         const newMessages = [...prev];
-        newMessages[newMessages.length - 1].text = "Connection interrupted.";
+        newMessages[newMessages.length - 1].text = "⚠️ Connection interrupted.";
         return newMessages;
       });
     } finally {
@@ -189,7 +202,6 @@ export default function ChatCore() {
     reader.readAsDataURL(file);
   };
 
-  // ---- VOICE LOGIC STARTS ----
   const startStreamingVoice = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -317,62 +329,34 @@ export default function ChatCore() {
       }
     }
   };
-  // ---- VOICE LOGIC ENDS ----
 
   const isInputModeActive = showTextInput || activeVideoSource || selectedImage;
 
+  // --- RENDER DELEGATION TO UI COMPONENT ---
   return (
-    <div id="indra-chat-core-container" className="indra-container">
-      
-      <ChatHeader 
-        selectedModel={selectedModel} 
-        handleModelChange={handleModelChange} 
-      />
-
-      <ChatMessageList 
-        messages={messages} 
-        isLoading={isLoading} 
-        messagesEndRef={messagesEndRef} 
-      />
-
-      <div className="indra-action-hub">
-        <input
-          type="file"
-          accept="image/*"
-          ref={fileInputRef}
-          onChange={handleDeviceUpload}
-          style={{ display: 'none' }}
-        />
-
-        {isInputModeActive ? (
-          <ChatInputForm 
-            input={input}
-            setInput={setInput}
-            handleSend={handleSend}
-            isLoading={isLoading}
-            setShowTextInput={setShowTextInput}
-            setActiveVideoSource={setActiveVideoSource}
-            selectedImage={selectedImage}
-            activeVideoSource={activeVideoSource}
-          />
-        ) : (
-          <ChatActionDock 
-            showActionMenu={showActionMenu}
-            setShowActionMenu={setShowActionMenu}
-            setShowTextInput={setShowTextInput}
-            toggleVoice={toggleVoice}
-            setActiveVideoSource={setActiveVideoSource}
-            fileInputRef={fileInputRef}
-            setIsVaultOpen={setIsVaultOpen}
-          />
-        )}
-      </div>
-
-      <ChatVault 
-        isOpen={isVaultOpen} 
-        onClose={() => setIsVaultOpen(false)} 
-        onSelectConversation={loadConversation}
-      />
-    </div>
+    <ChatUI 
+      messages={messages}
+      input={input}
+      selectedModel={selectedModel}
+      showActionMenu={showActionMenu}
+      showTextInput={showTextInput}
+      selectedImage={selectedImage}
+      activeVideoSource={activeVideoSource}
+      isVaultOpen={isVaultOpen}
+      isLoading={isLoading}
+      isInputModeActive={isInputModeActive}
+      setInput={setInput}
+      setShowActionMenu={setShowActionMenu}
+      setShowTextInput={setShowTextInput}
+      setActiveVideoSource={setActiveVideoSource}
+      setIsVaultOpen={setIsVaultOpen}
+      fileInputRef={fileInputRef}
+      messagesEndRef={messagesEndRef}
+      handleModelChange={handleModelChange}
+      handleSend={handleSend}
+      handleDeviceUpload={handleDeviceUpload}
+      toggleVoice={toggleVoice}
+      loadConversation={loadConversation}
+    />
   );
 }
