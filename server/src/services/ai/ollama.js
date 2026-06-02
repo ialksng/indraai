@@ -1,16 +1,16 @@
 const axios = require("axios");
 
-const OLLAMA_URL =
-    process.env.OLLAMA_URL ||
-    "http://localhost:11434";
+const OLLAMA_URL = process.env.OLLAMA_URL || "http://localhost:11434";
 
 async function generate(model, prompt) {
+    // 1. Ensure prompt is an array of messages
+    const messages = Array.isArray(prompt) ? prompt : [{ role: "user", content: String(prompt) }];
 
     const response = await axios.post(
-        `${OLLAMA_URL}/api/generate`,
+        `${OLLAMA_URL}/api/chat`, // FIXED: Changed from /generate to /chat
         {
             model,
-            prompt,
+            messages, // FIXED: Sending messages array instead of a string prompt
             stream: false,
             options: {
                 temperature: 0.7,
@@ -23,18 +23,21 @@ async function generate(model, prompt) {
         }
     );
 
-    return response.data.response;
+    // FIXED: /api/chat returns response.data.message.content
+    return response.data.message.content; 
 }
 
 async function stream(model, prompt, onToken) {
+    // 1. Ensure prompt is an array of messages
+    const messages = Array.isArray(prompt) ? prompt : [{ role: "user", content: String(prompt) }];
 
     const response = await axios({
         method: "post",
-        url: `${OLLAMA_URL}/api/generate`,
+        url: `${OLLAMA_URL}/api/chat`, // FIXED: Changed from /generate to /chat
         responseType: "stream",
         data: {
             model,
-            prompt,
+            messages, // FIXED: Sending messages array
             stream: true,
             options: {
                 temperature: 0.7,
@@ -46,29 +49,22 @@ async function stream(model, prompt, onToken) {
     });
 
     return new Promise((resolve, reject) => {
-
         let finalText = "";
 
         response.data.on("data", (chunk) => {
-
             const lines = chunk
                 .toString()
                 .split("\n")
                 .filter(Boolean);
 
             for (const line of lines) {
-
                 try {
+                    const parsed = JSON.parse(line);
 
-                    const parsed =
-                        JSON.parse(line);
-
-                    if (parsed.response) {
-
-                        finalText +=
-                            parsed.response;
-
-                        onToken(parsed.response);
+                    // FIXED: /api/chat streams parsed.message.content
+                    if (parsed.message && parsed.message.content) {
+                        finalText += parsed.message.content;
+                        onToken(parsed.message.content);
                     }
 
                     if (parsed.done) {
@@ -79,10 +75,7 @@ async function stream(model, prompt, onToken) {
             }
         });
 
-        response.data.on(
-            "error",
-            reject
-        );
+        response.data.on("error", reject);
     });
 }
 

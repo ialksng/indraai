@@ -1,30 +1,24 @@
 const express = require("express");
 const router = express.Router();
-const ai = require("../router/router");
 
+const ai = require("../router/router");
 const {
     createConversation,
     addMessage,
-    getMessages
+    getMessages,
+    getConversations 
 } = require("../memory/conversations");
+const { buildContext } = require("../memory/contextBuilder");
 
-const {
-    buildContext
-} = require("../memory/contextBuilder");
-
+// ==========================================
+// 1. MAIN CHAT STREAMING ROUTE
+// ==========================================
 router.post("/", async (req, res) => {
     try {
-        let {
-            prompt,
-            mode = "smart",
-            conversationId
-        } = req.body;
+        let { prompt, mode = "smart", conversationId } = req.body;
 
         if (!prompt) {
-            return res.status(400).json({
-                success: false,
-                error: "Prompt required"
-            });
+            return res.status(400).json({ success: false, error: "Prompt required" });
         }
 
         if (!conversationId) {
@@ -32,12 +26,7 @@ router.post("/", async (req, res) => {
             conversationId = conversation.id;
         }
 
-        await addMessage(
-            conversationId,
-            "user",
-            prompt
-        );
-
+        await addMessage(conversationId, "user", prompt);
         const messages = await getMessages(conversationId);
         const context = buildContext(messages);
 
@@ -49,47 +38,42 @@ router.post("/", async (req, res) => {
 
         let finalResponse = "";
 
-        await ai.stream(
-            context,
-            mode,
-            (token) => {
-                finalResponse += token;
-                res.write(
-                    `data: ${JSON.stringify({
-                        token
-                    })}\n\n`
-                );
-            }
-        );
+        await ai.stream(context, mode, (token) => {
+            finalResponse += token;
+            res.write(`data: ${JSON.stringify({ token })}\n\n`);
+        });
 
-        await addMessage(
-            conversationId,
-            "assistant",
-            finalResponse
-        );
-
-        res.write(
-            `data: ${JSON.stringify({
-                done: true,
-                conversationId
-            })}\n\n`
-        );
-
+        await addMessage(conversationId, "assistant", finalResponse);
+        res.write(`data: ${JSON.stringify({ done: true, conversationId })}\n\n`);
         res.end();
+
     } catch (err) {
         console.error(err);
         res.end();
     }
 });
 
-// Added route to fetch history for the ChatVault
+// ==========================================
+// 2. VAULT ROUTES
+// ==========================================
+router.get("/history/:userId", async (req, res) => {
+    try {
+        const userId = req.params.userId || "guest";
+        const history = await getConversations(userId);
+        res.json({ success: true, history });
+    } catch (error) {
+        console.error("Vault Error:", error);
+        res.status(500).json({ success: false, error: "Failed to load vault" });
+    }
+});
+
 router.get("/history/messages/:conversationId", async (req, res) => {
     try {
         const messages = await getMessages(req.params.conversationId);
         res.json({ success: true, messages });
     } catch (error) {
-        console.error("Failed to fetch history:", error);
-        res.status(500).json({ success: false, error: "Failed to load history" });
+        console.error("Vault Messages Error:", error);
+        res.status(500).json({ success: false, error: "Failed to load messages" });
     }
 });
 

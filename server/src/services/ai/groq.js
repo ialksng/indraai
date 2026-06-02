@@ -7,22 +7,21 @@ const client = new OpenAI({
 
 async function generate(prompt) {
 
-    const completion =
-        await client.chat.completions.create({
+    const messagesPayload = Array.isArray(prompt) 
+        ? prompt 
+        : [{ role: "user", content: String(prompt) }];
 
-        model: process.env.GROQ_MODEL,
+    try {
+        const completion = await client.chat.completions.create({
+            model: process.env.GROQ_MODEL, 
+            messages: messagesPayload
+        });
 
-        messages: [
-            {
-                role: "user",
-                content: prompt
-            }
-        ]
-    });
-
-    return completion
-        .choices[0]
-        .message.content;
+        return completion.choices[0].message.content;
+    } catch (error) {
+        console.error("Groq Generation Error:", error);
+        throw error;
+    }
 }
 
 module.exports = {
