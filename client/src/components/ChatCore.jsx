@@ -6,7 +6,7 @@ import ChatHeader from './ChatHeader';
 import ChatMessageList from './ChatMessageList';
 import ChatInputForm from './ChatInputForm';
 import ChatActionDock from './ChatActionDock';
-import ChatVault from './ChatVault'; // <-- Vault Import added
+import ChatVault from './ChatVault'; 
 
 function floatTo16BitPCM(float32Arr) {
   const buffer = new ArrayBuffer(float32Arr.length * 2);
@@ -21,7 +21,7 @@ function floatTo16BitPCM(float32Arr) {
 export default function ChatCore() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
-  const [conversationId, setConversationId] = useState(null); // Added for persistent memory
+  const [conversationId, setConversationId] = useState(null); 
   const [selectedModel, setSelectedModel] = useState('smart');
   const [automationEnabled, setAutomationEnabled] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
@@ -33,6 +33,9 @@ export default function ChatCore() {
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [activeVideoSource, setActiveVideoSource] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  // SAFE API BASE URL FALLBACK
+  const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -75,7 +78,7 @@ export default function ChatCore() {
     setConversationId(id);
     
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/v1/indra/chat/history/messages/${id}`);
+      const response = await fetch(`${API_BASE}/api/v1/indra/chat/history/messages/${id}`);
       const data = await response.json();
       
       if (data.success) {
@@ -112,8 +115,7 @@ export default function ChatCore() {
     setMessages((prev) => [...prev, { role: 'ai', text: '' }]);
 
     try {
-      // Adjusted route to match backend prefix
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/v1/indra/chat`, {
+      const response = await fetch(`${API_BASE}/api/v1/indra/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -268,8 +270,7 @@ export default function ChatCore() {
 
         try {
           setIsLoading(true);
-          // Adjusted route to match backend prefix
-          const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/v1/indra/voice`, {
+          const res = await fetch(`${API_BASE}/api/v1/indra/voice`, {
             method: 'POST',
             body: formData
           });
@@ -280,7 +281,7 @@ export default function ChatCore() {
             { role: 'ai', text: data.response }
           ]);
           if (data.audio_url) {
-            const audio = new Audio(`${import.meta.env.VITE_API_BASE_URL}${data.audio_url}`);
+            const audio = new Audio(`${API_BASE}${data.audio_url}`);
             audio.play();
           }
         } catch (err) {
@@ -367,7 +368,6 @@ export default function ChatCore() {
         )}
       </div>
 
-      {/* ---- NEW: Render the Vault Component ---- */}
       <ChatVault 
         isOpen={isVaultOpen} 
         onClose={() => setIsVaultOpen(false)} 
