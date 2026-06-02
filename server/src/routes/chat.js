@@ -1,9 +1,6 @@
 const express = require("express");
-
 const router = express.Router();
-
-const ai =
-    require("../router/router");
+const ai = require("../router/router");
 
 const {
     createConversation,
@@ -16,9 +13,7 @@ const {
 } = require("../memory/contextBuilder");
 
 router.post("/", async (req, res) => {
-
     try {
-
         let {
             prompt,
             mode = "smart",
@@ -26,7 +21,6 @@ router.post("/", async (req, res) => {
         } = req.body;
 
         if (!prompt) {
-
             return res.status(400).json({
                 success: false,
                 error: "Prompt required"
@@ -34,12 +28,8 @@ router.post("/", async (req, res) => {
         }
 
         if (!conversationId) {
-
-            const conversation =
-                await createConversation();
-
-            conversationId =
-                conversation.id;
+            const conversation = await createConversation();
+            conversationId = conversation.id;
         }
 
         await addMessage(
@@ -48,19 +38,12 @@ router.post("/", async (req, res) => {
             prompt
         );
 
-        const messages =
-            await getMessages(
-                conversationId
-            );
-
-        const context =
-            buildContext(messages);
+        const messages = await getMessages(conversationId);
+        const context = buildContext(messages);
 
         res.writeHead(200, {
-            "Content-Type":
-                "text/event-stream",
-            "Cache-Control":
-                "no-cache",
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
             Connection: "keep-alive"
         });
 
@@ -70,9 +53,7 @@ router.post("/", async (req, res) => {
             context,
             mode,
             (token) => {
-
                 finalResponse += token;
-
                 res.write(
                     `data: ${JSON.stringify({
                         token
@@ -95,12 +76,20 @@ router.post("/", async (req, res) => {
         );
 
         res.end();
-
     } catch (err) {
-
         console.error(err);
-
         res.end();
+    }
+});
+
+// Added route to fetch history for the ChatVault
+router.get("/history/messages/:conversationId", async (req, res) => {
+    try {
+        const messages = await getMessages(req.params.conversationId);
+        res.json({ success: true, messages });
+    } catch (error) {
+        console.error("Failed to fetch history:", error);
+        res.status(500).json({ success: false, error: "Failed to load history" });
     }
 });
 
